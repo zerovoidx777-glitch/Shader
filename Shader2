@@ -1,0 +1,295 @@
+-- ==========================================
+-- LS Hub | Ultra Shaders & Realistic Graphics
+-- Compatible with Xeno & Universal Executors
+-- ==========================================
+
+if setfpscap then setfpscap(1000) end
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "LS Hub",
+    SubTitle = "Ultra Shaders & Real-time FPS",
+    TabWidth = 170,
+    Size = UDim2.fromOffset(600, 440),
+    Acrylic = false,
+    Theme = "Darker",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+-- Services
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+
+-------------------------------------------------
+-- 1. REAL-TIME FPS WIDGET (UI ซ้ายบน)
+-------------------------------------------------
+if CoreGui:FindFirstChild("LS_FPS_Realtime_Widget") then
+    CoreGui.LS_FPS_Realtime_Widget:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LS_FPS_Realtime_Widget"
+ScreenGui.ResetOnSpawn = false
+
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then 
+    ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") 
+end
+
+local Main = Instance.new("Frame")
+Main.Name = "MainFrame"
+Main.Size = UDim2.new(0, 210, 0, 56)
+Main.Position = UDim2.new(0, 20, 0, 20)
+Main.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+Main.BackgroundTransparency = 0.15
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner", Main)
+Corner.CornerRadius = UDim.new(0, 10)
+
+local Stroke = Instance.new("UIStroke", Main)
+Stroke.Color = Color3.fromRGB(0, 255, 170)
+Stroke.Thickness = 1.5
+Stroke.Transparency = 0.3
+
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1, -20, 0, 16)
+Title.Position = UDim2.new(0, 10, 0, 6)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.Text = "⚡ PERFORMANCE TRACKER"
+Title.TextColor3 = Color3.fromRGB(140, 140, 160)
+Title.TextSize = 10
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+local FPSText = Instance.new("TextLabel", Main)
+FPSText.Size = UDim2.new(1, -20, 0, 22)
+FPSText.Position = UDim2.new(0, 10, 0, 20)
+FPSText.BackgroundTransparency = 1
+FPSText.Font = Enum.Font.GothamBlack
+FPSText.Text = "FPS: CALCULATING..."
+FPSText.TextColor3 = Color3.fromRGB(255, 255, 255)
+FPSText.TextSize = 18
+FPSText.TextXAlignment = Enum.TextXAlignment.Left
+
+local BarBg = Instance.new("Frame", Main)
+BarBg.Size = UDim2.new(1, -20, 0, 6)
+BarBg.Position = UDim2.new(0, 10, 0, 43)
+BarBg.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
+BarBg.BorderSizePixel = 0
+
+local BarBgCorner = Instance.new("UICorner", BarBg)
+BarBgCorner.CornerRadius = UDim.new(0, 4)
+
+local BarFill = Instance.new("Frame", BarBg)
+BarFill.Size = UDim2.new(0, 0, 1, 0)
+BarFill.BackgroundColor3 = Color3.fromRGB(0, 255, 170)
+BarFill.BorderSizePixel = 0
+
+local BarFillCorner = Instance.new("UICorner", BarFill)
+BarFillCorner.CornerRadius = UDim.new(0, 4)
+
+local Gradient = Instance.new("UIGradient", BarFill)
+Gradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 200, 255)),
+    ColorSequenceKeypoint.new(0.6, Color3.fromRGB(0, 255, 170)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 215, 0))
+}
+
+-- Drag System
+local dragging, dragInput, dragStart, startPos
+Main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+Main.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Real-time FPS Calculator
+local frameTimes = {}
+RunService.RenderStepped:Connect(function()
+    local now = os.clock()
+    table.insert(frameTimes, now)
+    while frameTimes[1] and frameTimes[1] < now - 1 do
+        table.remove(frameTimes, 1)
+    end
+    local currentFps = #frameTimes
+    FPSText.Text = string.format("FPS: %d", currentFps)
+
+    local fillRatio = math.clamp(currentFps / 240, 0.05, 1)
+    TweenService:Create(BarFill, TweenInfo.new(0.1, Enum.EasingStyle.Linear), { Size = UDim2.new(fillRatio, 0, 1, 0) }):Play()
+
+    if currentFps >= 60 then
+        Stroke.Color = Color3.fromRGB(0, 255, 170)
+    elseif currentFps >= 30 then
+        Stroke.Color = Color3.fromRGB(255, 180, 0)
+    else
+        Stroke.Color = Color3.fromRGB(255, 60, 60)
+    end
+end)
+
+-------------------------------------------------
+-- 2. ULTRA GRAPHICS & SHADERS PIPELINE
+-------------------------------------------------
+local Bloom = Lighting:FindFirstChild("LS_Bloom") or Instance.new("BloomEffect", Lighting)
+Bloom.Name = "LS_Bloom"
+Bloom.Intensity = 0.85
+Bloom.Size = 32
+Bloom.Threshold = 0.7
+Bloom.Enabled = false
+
+local ColorCorr = Lighting:FindFirstChild("LS_ColorCorr") or Instance.new("ColorCorrectionEffect", Lighting)
+ColorCorr.Name = "LS_ColorCorr"
+ColorCorr.Brightness = 0.04
+ColorCorr.Contrast = 0.35
+ColorCorr.Saturation = 0.55
+ColorCorr.Enabled = false
+
+local SunRays = Lighting:FindFirstChild("LS_SunRays") or Instance.new("SunRaysEffect", Lighting)
+SunRays.Name = "LS_SunRays"
+SunRays.Intensity = 0.45
+SunRays.Spread = 0.95
+SunRays.Enabled = false
+
+local DOF = Lighting:FindFirstChild("LS_DOF") or Instance.new("DepthOfFieldEffect", Lighting)
+DOF.Name = "LS_DOF"
+DOF.FarIntensity = 0.35
+DOF.FocusDistance = 25
+DOF.InFocusRadius = 20
+DOF.NearIntensity = 0.15
+DOF.Enabled = false
+
+-------------------------------------------------
+-- 3. UI TABS & CONTROLS
+-------------------------------------------------
+local Tabs = {
+    Visuals = Window:AddTab({ Title = "ภาพสวยจัดๆ (Ultra Shaders)", Icon = "image" }),
+    Settings = Window:AddTab({ Title = "การตั้งค่า / FPS Boost", Icon = "settings" })
+}
+
+-- TAB 1: ULTRA VISUALS
+Tabs.Visuals:AddToggle("UltraShadersBtn", {
+    Title = "เปิดโหมดกราฟิกสวยจัดระดับ AAA (Ultra Shaders)",
+    Default = false
+}):OnChanged(function(Value)
+    Bloom.Enabled = Value
+    ColorCorr.Enabled = Value
+    SunRays.Enabled = Value
+    Lighting.GlobalShadows = Value
+    if Value then
+        Lighting.OutdoorAmbient = Color3.fromRGB(130, 130, 150)
+    else
+        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+    end
+end)
+
+Tabs.Visuals:AddToggle("DOFBtn", {
+    Title = "เปิดโหมดมิติกล้องเบลอหลัง (Depth of Field)",
+    Default = false
+}):OnChanged(function(Value)
+    DOF.Enabled = Value
+end)
+
+Tabs.Visuals:AddToggle("FullbrightBtn", {
+    Title = "เปิดความสว่างใสไร้เงามืด (Fullbright Mode)",
+    Default = false
+}):OnChanged(function(Value)
+    if Value then
+        Lighting.Brightness = 2.8
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 1000000
+    else
+        Lighting.Brightness = 1
+    end
+end)
+
+Tabs.Visuals:AddSlider("SaturationSlider", {
+    Title = "ปรับความสดของสีภาพ (Saturation)",
+    Default = 55,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Callback = function(Value)
+        ColorCorr.Saturation = Value / 100
+    end
+})
+
+Tabs.Visuals:AddSlider("ContrastSlider", {
+    Title = "ปรับความคมชัดเงามิติภาพ (Contrast)",
+    Default = 35,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Callback = function(Value)
+        ColorCorr.Contrast = Value / 100
+    end
+})
+
+Tabs.Visuals:AddSlider("BloomSlider", {
+    Title = "ปรับความฟุ้งละอองแสง (Bloom Intensity)",
+    Default = 85,
+    Min = 0,
+    Max = 150,
+    Rounding = 0,
+    Callback = function(Value)
+        Bloom.Intensity = Value / 100
+    end
+})
+
+-- TAB 2: SETTINGS
+Tabs.Settings:AddToggle("ShowFPSUIBtn", {
+    Title = "แสดง/ซ่อน Widget FPS ซ้ายบน",
+    Default = true
+}):OnChanged(function(Value)
+    ScreenGui.Enabled = Value
+end)
+
+Tabs.Settings:AddButton({
+    Title = "โหมดลบวัตถุหนักฉุกเฉิน (Potato Mode / ดัน FPS)",
+    Callback = function()
+        pcall(function()
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+            for _, v in pairs(Workspace:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.Material = Enum.Material.SmoothPlastic
+                    v.CastShadow = false
+                elseif v:IsA("Decal") or v:IsA("Texture") then
+                    v.Transparency = 1
+                elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                    v.Enabled = false
+                end
+            end
+            Fluent:Notify({ Title = "LS Hub", Content = "เปิดโหมดดัน FPS เรียบร้อย!", Duration = 2 })
+        end)
+    end
+})
+
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title = "LS Hub Ultra Graphics Loaded",
+    Content = "ระบบ Ultra Shaders & Real-time FPS พร้อมใช้งาน!",
+    Duration = 3
+})
